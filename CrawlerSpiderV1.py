@@ -37,6 +37,7 @@ class TrainSpider(object):
         self.passengers = passengers
         self.station_codes = dict()
         self.selected_number = None
+        self.selected_seat = None
         # 初始化站点所对应的代号
         self.init_station_code()
 
@@ -135,6 +136,7 @@ class TrainSpider(object):
         seat_types = self.trains[self.selected_number]
         for seat_type in seat_types:
             try:
+                self.selected_seat = seat_type
                 seat_select.select_by_value(seat_type)
             except NoSuchElementException:
                 continue
@@ -146,6 +148,23 @@ class TrainSpider(object):
         )
         submit_btn = driver.find_element_by_id("submitOrder_id")
         submit_btn.click()
+
+        WebDriverWait(driver, 1000).until(
+            EC.presence_of_element_located((By.CLASS_NAME,"dhtmlx_wins_body_inner"))
+        )
+
+        WebDriverWait(driver, 1000).until(
+            EC.element_to_be_clickable((By.ID, "qr_submit_id"))
+        )
+
+        order_btn = driver.find_element_by_id("qr_submit_id")
+        while order_btn:
+            try:
+                order_btn.click()
+                order_btn = driver.find_element_by_id("qr_submit_id")
+            except:
+                break
+        print("恭喜！%s车次%s抢票成功" % (self.selected_number, self.selected_seat))
 
 
 
@@ -160,7 +179,7 @@ class TrainSpider(object):
 
 
 def main():
-    spider = TrainSpider("淮安", "南京", "2022-09-23", {"D5515":["O", "M"]}, ["袁智丹"])
+    spider = TrainSpider("淮安", "南京", "2022-09-23", {"D5515":["O", "M"]}, ["XXXXX"])
     spider.run()
 
 
