@@ -10,6 +10,8 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select
+from selenium.common.exceptions import NoSuchElementException
 
 driver = webdriver.Chrome()
 # 9：商务座，M：一等座，O：二等座，3：硬卧，4：软卧，1：硬座
@@ -18,19 +20,23 @@ class TrainSpider(object):
     login_url = "https://kyfw.12306.cn/otn/resources/login.html"
     personal_url = "https://kyfw.12306.cn/otn/view/index.html"
     left_ticket_url = "https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc"
+    confirm_passenger_url = "https://kyfw.12306.cn/otn/confirmPassenger/initDc"
 
-    def __init__(self, from_station, to_station, train_date, trains):
+    def __init__(self, from_station, to_station, train_date, trains, passengers):
         """
         :param from_station: 出发站
         :param to_station: 到达站
         :param train_date: 日期
         :param trains: 车次
+        :param passengers: 购票人
         """
         self.from_station = from_station
         self.to_station = to_station
         self.train_date = train_date
         self.trains = trains
+        self.passengers = passengers
         self.station_codes = dict()
+        self.selected_number = None
         # 初始化站点所对应的代号
         self.init_station_code()
 
@@ -104,9 +110,42 @@ class TrainSpider(object):
                             is_searched = True
                             break
                 if is_searched is True:
+                    self.selected_number = number
                     order_btn = train_tr.find_element_by_xpath("//a[@class='btn72']")
                     order_btn.click()
                     break
+
+    def confirm_passengers(self):
+        WebDriverWait(driver, 1000).until(
+            EC.url_contains(self.confirm_passenger_url)
+        )
+
+        WebDriverWait(driver, 1000).until(
+            EC.presence_of_element_located((By.XPATH, "//ul[@id='normal_passenger_id']/li/label"))
+        )
+
+        # 确认需要购买车票的乘客
+        passenger_labels = driver.find_elements_by_xpath("//ul[@id='normal_passenger_id']/li/label")
+        for passenger_label in passenger_labels:
+            name = passenger_label.text
+            if name in self.passengers:
+                passenger_label.click()
+        # 确认需要购买的席位信息
+        seat_select = Select(driver.find_element_by_id("seatType_1"))
+        seat_types = self.trains[self.selected_number]
+        for seat_type in seat_types:
+            try:
+                seat_select.select_by_value(seat_type)
+            except NoSuchElementException:
+                continue
+            else:
+                break
+        # 等待提交订单按钮可以被点击
+        WebDriverWait(driver, 1000).until(
+            EC.element_to_be_clickable((By.ID, "submitOrder_id"))
+        )
+        submit_btn = driver.find_element_by_id("submitOrder_id")
+        submit_btn.click()
 
 
 
@@ -115,10 +154,13 @@ class TrainSpider(object):
         self.login()
         # 2. 车次余票查询
         self.search_left_ticket()
+        # 3. 确认乘客和车次信息
+        self.confirm_passengers()
+
 
 
 def main():
-    spider = TrainSpider("淮安", "南京", "2022-09-23", {"D5515":["O", "M"]})
+    spider = TrainSpider("淮安", "南京", "2022-09-23", {"D5515":["O", "M"]}, ["袁智丹"])
     spider.run()
 
 
