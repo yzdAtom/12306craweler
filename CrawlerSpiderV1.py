@@ -8,19 +8,28 @@
 import csv
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
 driver = webdriver.Chrome()
+# 9：商务座，M：一等座，O：二等座，3：硬卧，4：软卧，1：硬座
 
 class TrainSpider(object):
     login_url = "https://kyfw.12306.cn/otn/resources/login.html"
     personal_url = "https://kyfw.12306.cn/otn/view/index.html"
     left_ticket_url = "https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc"
 
-    def __init__(self, from_station, to_station, train_date):
+    def __init__(self, from_station, to_station, train_date, trains):
+        """
+        :param from_station: 出发站
+        :param to_station: 到达站
+        :param train_date: 日期
+        :param trains: 车次
+        """
         self.from_station = from_station
         self.to_station = to_station
         self.train_date = train_date
+        self.trains = trains
         self.station_codes = dict()
         # 初始化站点所对应的代号
         self.init_station_code()
@@ -68,6 +77,39 @@ class TrainSpider(object):
         search_btn = driver.find_element_by_id("query_ticket")
         search_btn.click()
 
+        # 解析车次信息
+        # 等待列车信息被加载
+        WebDriverWait(driver, 1000).until(
+            EC.presence_of_element_located((By.XPATH, "//tbody[@id='queryLeftTable']/tr"))
+        )
+        train_trs = driver.find_elements_by_xpath("//tbody[@id='queryLeftTable']/tr[not(@datatran)]")
+        is_searched = False
+        for train_tr in train_trs:
+            # print(train_tr.text)
+            infos = train_tr.text.replace("\n", " ").split(" ")
+            number = infos[0]
+            if number in self.trains:
+                seat_types = self.trains[number]
+                for seat_type in seat_types:
+                    if seat_type == "O":
+                        # 二等座
+                        count = infos[9]
+                        if count.isdigit() or count == "有":
+                            is_searched = True
+                            break
+                    elif seat_type == "M":
+                        # 一等座
+                        count = infos[8]
+                        if count.isdigit() or count == "有":
+                            is_searched = True
+                            break
+                if is_searched is True:
+                    order_btn = train_tr.find_element_by_xpath("//a[@class='btn72']")
+                    order_btn.click()
+                    break
+
+
+
     def run(self):
         # 1. 登录
         self.login()
@@ -76,7 +118,7 @@ class TrainSpider(object):
 
 
 def main():
-    spider = TrainSpider("淮安", "南京", "2022-09-23")
+    spider = TrainSpider("淮安", "南京", "2022-09-23", {"D5515":["O", "M"]})
     spider.run()
 
 
